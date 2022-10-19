@@ -1,0 +1,340 @@
+---
+title: "television-dataset"
+author: "ilke"
+date: "2022-08-06"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+
+```{r , message=F}
+
+library(mice)
+library(tidyverse)
+library(psych)
+library(funModeling)
+library(d3Tree)
+library(d3Tree)
+library(magrittr)
+library(DataExplorer)
+library(maps)
+library(plotly)
+library(DT)
+library(tidytext)
+library(gridExtra)
+library(dplyr)
+library(factoextra)
+library(randomForest)
+library(corrplot)
+library(plyr)
+library(scales)
+library(readr)
+library(ggthemes)
+library(ggplot2)
+library(tidyverse)
+library(lubridate)
+library(funModeling)
+library(Hmisc)
+library(pls)
+library(elasticnet)
+library(broom)
+library(glmnet)
+library(MASS)
+library(ISLR)
+library(PerformanceAnalytics)
+library(funModeling)
+library(Matrix)
+library(readxl)
+library(tidyverse)
+library(funModeling)
+library(magrittr)
+library(DataExplorer)
+library(maps)
+library(plotly)
+library(DT)
+library(tidytext)
+library(gridExtra)
+library(dplyr)
+library(naniar)
+library(factoextra)
+library(randomForest)
+library(corrplot)
+library(plyr)
+library(scales)
+library(readr)
+library(ggthemes)
+library(ggplot2)
+library(tidyverse)
+library(tidyselect)
+
+```
+
+
+
+
+### 1.veri aktarımı
+```{r}
+getwd()
+
+setwd("/home/ilke/Downloads")
+
+df<- read.csv("TELEVISION.csv",sep=",",header=TRUE,stringsAsFactors = FALSE)
+
+```
+
+### 2.veriye ilk bakış
+```{r}
+colnames(df)
+rownames(df)
+nrow(df)
+ncol(df)
+head(df)
+str(df)
+glimpse(df)  #veri seti genel yapı hakkında bilgi
+psych::headTail(df)  #ilk 4 son 4 gözlem
+summary(df)
+
+class(df$Stars)
+
+```
+
+
+
+
+### 3. veri ön işleme/ temizleme
+
+
+İlgilenmeyeceğim sütunlar veri setinden silindi.
+```{r}
+df$Image_url <- NULL
+
+df$Frequency <- NULL
+
+df$curr <- NULL
+
+
+```
+
+
+```{r}
+df$current_price<- str_replace(df$current_price, "[₹]", "")
+
+df$MRP<- str_replace(df$MRP, "[₹]", "")
+```
+
+uygun değişken tiplerine dönüştürüldü.
+```{r}
+
+df$Ratings <- as.integer(df$Ratings)
+
+df$Reviews <- as.integer(df$Reviews)
+
+df$current_price <- as.numeric(df$current_price)
+
+df$MRP <- as.integer(df$MRP)
+
+df$Stars <- as.numeric(df$Stars)
+
+df$Product_Name <- as.factor(df$Product_Name)
+
+
+glimpse(df)
+
+
+
+```
+
+
+
+```{r loadlib, echo=T, results='hide', message=F, warning=F}
+library(funModeling)
+profiling_num(df)   #sürekli değişkenlerin özet bazı istatistiklerini verir
+plot_num(df)  #genel histogram
+freq(df)      #detaylı data frame,grafikler verir
+```
+
+
+
+
+```{r}
+
+df[df==""] <- NA
+
+#eksik gözlem tespit için boş gözlemlere NA eklendi.
+
+
+```
+
+### eksik verilerin yapısını inceleme
+
+ho: eksik veriler rastgele dağılmıştır.
+h1: eksik veriler rastgele dağılmamıştır.
+```{r}
+test<- mcar_test(df)
+test                          
+
+#p.value<0.5 ho kabul edilemez.
+# sonuç: %5 anlamlılık düzeyinde eksik veriler rastgele dağılmamıştır.
+```
+
+
+
+
+
+
+```{r}
+
+#testin sonucunun doğruluğunu anlayabilmek ve çözüm bulabilmek için aşağıdaki adımlar izlendi.
+
+sum(is.na(df))       #toplam
+
+colSums(is.na(df))
+
+which(is.na(df))
+
+
+#eksik veriler azdır.
+
+md.pattern(df) #eksikliklerin aynı satırlarda olduğunu gördük. (rastgele değil) (bazı ürünler için verilerin eksiklikten ziyade yokluk olduğunu görüyoruz.)
+
+df[!complete.cases(df), ] #en az bir tane eksik olanlari dondurerek eksik satırları tespit ettikç veri setinden silerek eksik gözlem sorununu ortadan kaldırabiliriz.
+```
+
+
+### eksik veri silme
+```{r}
+df=na.omit(df)
+```
+
+veriyi daha iyi anlayabilmek
+```{r}
+d3tree(list(root = df2tree(rootname ='television', 
+                           struct = as.data.frame(df)), 
+                           layout = 'collapse'))
+```
+```{r}
+
+histogram(df$Product_Name)
+
+markaadedi<- df %>% group_by(Product_Name) %>% tally() %>% arrange(n, decreasing=T)
+
+markaadedi   
+
+#en fazla 3 ürün ADSUN,CROMA ve Samsung markasına aittir.
+
+```
+
+```{r}
+ggplot(df,aes(Product_Name, fill=Product_Name))+
+  geom_bar()+
+  coord_polar(theta = "y")
+```
+
+```{r}
+ggplot(df, aes(Stars, fill = Product_Name)) +
+  geom_bar(position = position_dodge()) + 
+  ggtitle("Markaların aldıkları yıldızlar") +
+  xlab("Stars") + 
+  ylab("Gozlenme Sikliklari")
+
+```
+
+
+
+```{r}
+#en çok ürünü olan 3 marka 
+df3<- df %>% 
+  filter(Product_Name == "Adsun" |
+        Product_Name == "Croma" |
+        Product_Name == "SAMSUNG")
+```
+
+
+```{r}
+ggplot(df3, aes(Product_Name, fill = Operating_system)) +
+  geom_bar(position = position_dodge()) + 
+  ggtitle("markalara göre kullandıkları operating system") +
+  xlab("Marka") + 
+  ylab("Gozlenme Sikliklari")
+```
+
+
+
+```{r}
+a<- df %>% dplyr::select(Product_Name, Stars) %>%
+  filter(Product_Name== "Adsun") %>%
+  summarise(adsun_ortalama = mean(Stars))
+
+b<- df %>% dplyr::select(Product_Name, Stars) %>%
+  filter(Product_Name== "Croma") %>%
+  summarise(croma_ortalama = mean(Stars))
+
+c<- df %>% dplyr::select(Product_Name, Stars) %>%
+  filter(Product_Name== "SAMSUNG") %>%
+  summarise(Samsung_ortalama = mean(Stars))
+  
+
+d<- df %>% dplyr::select(Product_Name, Stars) %>%
+  filter(Product_Name== "LG") %>%
+  summarise(Lg_ortalama = mean(Stars))
+
+
+
+data.frame(a,b,c,d)  #en çok ürünü bulunan 4markanın ortalama aldığı yıldızlar
+```
+
+
+
+
+
+```{r}
+ggplot(df3, aes(Stars, fill = Product_Name)) +
+  geom_bar(position = position_dodge()) + 
+  ggtitle("Markaların aldıkları yıldızlar") +
+  xlab("Stars") + 
+  ylab("Gozlenme Sikliklari")
+```
+
+```{r}
+ggplot(df3, aes(Product_Name, fill = Operating_system)) +
+  geom_bar(position = position_dodge()) + 
+  ggtitle("markalara göre kullandıkları operating system") +
+  xlab("Marka") + 
+  ylab("Gozlenme Sikliklari")
+```
+
+```{r}
+ggplot(df,aes(Stars, fill=Product_Name))+
+  geom_bar()+
+  coord_polar(theta = "y")
+```
+
+
+
+```{r, warning=FALSE}
+ggplot(df3, aes(Stars , current_price)) +
+  geom_point(size = 2, 
+             shape = 21, 
+             stroke = 1,
+             color = "black",
+             fill = "orange") +
+  geom_smooth(color = "red") + 
+  ggtitle("Adsun-LG-Samsung markalarının fiyat ve yıldızlar arasındaki korelasyonu")
+```
+
+
+```{r}
+ggplot(data = df) + 
+  geom_point(mapping = aes(x = Stars, y = MRP))+
+  geom_smooth(mapping = aes(x =Stars, y = MRP))
+```
+
+
+
+
+
+
+
+
